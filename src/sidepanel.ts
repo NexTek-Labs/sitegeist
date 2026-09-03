@@ -143,7 +143,7 @@ async function selectDefaultModelForAvailableProvider() {
 		if (modelId) {
 			const model = getModel(provider as any, modelId);
 			if (model) {
-				agent.setModel(model);
+				agent.state.model = model;
 				await storage.settings.set("lastUsedModel", model);
 				await updateAuthLabel();
 				renderApp();
@@ -156,7 +156,7 @@ async function selectDefaultModelForAvailableProvider() {
 	for (const provider of providers) {
 		const models = getModels(provider as any);
 		if (models.length > 0) {
-			agent.setModel(models[0]);
+			agent.state.model = models[0];
 			await storage.settings.set("lastUsedModel", models[0]);
 			await updateAuthLabel();
 			renderApp();
@@ -502,7 +502,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			ModelSelector.open(
 				agent.state.model,
 				(model) => {
-					agent.setModel(model);
+					agent.state.model = model;
 					chatPanel.agentInterface?.requestUpdate();
 					updateAuthLabel().catch(() => {});
 					renderApp();
@@ -537,7 +537,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 			// Only add if URL changed
 			if (!lastUrl || lastUrl !== tab.url) {
 				const navMessage = await createNavigationMessage(tab.url, tab.title || "Untitled", tab.favIconUrl, tab.id);
-				agent.appendMessage(navMessage);
+				agent.state.messages = [...agent.state.messages, navMessage];
 			}
 		},
 		onCostClick: () => {
@@ -1027,7 +1027,7 @@ async function initApp() {
 				await createAgent();
 				if (agent) {
 					const welcomeMessage = createWelcomeMessage(tutorials);
-					agent.appendMessage(welcomeMessage);
+					agent.state.messages = [...agent.state.messages, welcomeMessage];
 				}
 				renderApp();
 				return;
@@ -1060,7 +1060,7 @@ async function initApp() {
 	// Add welcome message for new sessions
 	if (agent) {
 		const welcomeMessage = createWelcomeMessage(tutorials);
-		agent.appendMessage(welcomeMessage);
+		agent.state.messages = [...agent.state.messages, welcomeMessage];
 	}
 
 	renderApp();
