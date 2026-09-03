@@ -44,6 +44,8 @@ jobs:
 
       - name: Fetch upstream
         # A fork: commits reachable from upstream are not ours to label.
+        # The upstream URL is pinned here on purpose; if this step starts failing on every
+        # push, check whether badlogic/sitegeist was renamed before anything else.
         if: github.event_name == 'push'
         run: git remote add upstream https://github.com/badlogic/sitegeist.git && git fetch --no-tags upstream main
 
