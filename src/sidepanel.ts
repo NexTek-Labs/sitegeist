@@ -9,7 +9,7 @@ import {
 	type AgentState,
 	type AgentTool,
 } from "@mariozechner/pi-agent-core";
-import { getModel, getModels, type Model } from "@mariozechner/pi-ai";
+import { getModel, getModels, getProviders, type Model } from "@mariozechner/pi-ai";
 import {
 	ChatPanel,
 	type CustomProvider,
@@ -176,14 +176,19 @@ async function getProvidersWithKeys(): Promise<string[]> {
 		const key = await storage.providerKeys.get(provider);
 		if (key) result.push(provider);
 	}
+	const knownProviders = new Set<string>(getProviders());
 	const customProviders = await storage.customProviders.getAll();
 	for (const custom of customProviders) {
+		// A custom provider named like a built-in never stands in for it
+		if (knownProviders.has(custom.name)) continue;
 		if (!result.includes(custom.name)) result.push(custom.name);
 	}
 	return result;
 }
 
+/** A custom provider by name; a built-in provider name is never treated as custom. */
 async function findCustomProvider(provider: string): Promise<CustomProvider | undefined> {
+	if ((getProviders() as string[]).includes(provider)) return undefined;
 	const customProviders = await storage.customProviders.getAll();
 	return customProviders.find((p) => p.name === provider);
 }
@@ -419,7 +424,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 		}),
 		getApiKey: async (provider: string) => {
 			const stored = await storage.providerKeys.get(provider);
-			if (!stored) return (await findCustomProvider(provider))?.apiKey;
+			if (!stored) return (await findCustomProvider(provider))?.apiKey || undefined;
 			const proxyEnabled = await storage.settings.get<boolean>("proxy.enabled");
 			const proxyUrl = proxyEnabled ? (await storage.settings.get<string>("proxy.url")) || undefined : undefined;
 			return resolveApiKey(stored, provider, storage.providerKeys, proxyUrl);
