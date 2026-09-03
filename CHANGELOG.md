@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Side panel no longer fails to initialise against the pinned pi-agent-core: `Agent.setModel` / `appendMessage` / `replaceMessages` (removed upstream 2026-03-30) replaced by direct state assignments
+
 ### Added
 
 - "Custom Providers" settings tab (Ollama, llama.cpp, vLLM, LM Studio, OpenAI/Anthropic-compatible endpoints) — restored after it was dropped with the OAuth settings rework
