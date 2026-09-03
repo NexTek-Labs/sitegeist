@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- "Custom Providers" settings tab (Ollama, llama.cpp, vLLM, LM Studio, OpenAI/Anthropic-compatible endpoints) — restored after it was dropped with the OAuth settings rework
+- Custom providers appear in the model selector and their stored key is used for requests, with no API-key prompt for keyless local servers
+
 ## [1.0.0] - 2026-03-15
 
 ### Added

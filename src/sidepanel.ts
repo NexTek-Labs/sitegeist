@@ -12,6 +12,7 @@ import {
 import { getModel, getModels, type Model } from "@mariozechner/pi-ai";
 import {
 	ChatPanel,
+	type CustomProvider,
 	createExtractDocumentTool,
 	createStreamFn,
 	ModelSelector,
@@ -27,6 +28,7 @@ import { AboutTab } from "./dialogs/AboutTab.js";
 import { ApiKeyOrOAuthDialog } from "./dialogs/ApiKeyOrOAuthDialog.js";
 import { ApiKeysOAuthTab } from "./dialogs/ApiKeysOAuthTab.js";
 import { CostsTab } from "./dialogs/CostsTab.js";
+import { CustomProvidersTab } from "./dialogs/CustomProvidersTab.js";
 import { SessionCostDialog } from "./dialogs/SessionCostDialog.js";
 import { SitegeistSessionListDialog } from "./dialogs/SessionListDialog.js";
 import { SkillsTab } from "./dialogs/SkillsTab.js";
@@ -163,6 +165,10 @@ async function selectDefaultModelForAvailableProvider() {
 	}
 }
 
+/**
+ * Providers the user can pick models from: cloud providers with a stored key, plus every
+ * custom provider (their key, if any, lives on the provider record; local servers need none).
+ */
 async function getProvidersWithKeys(): Promise<string[]> {
 	const providers = await storage.providerKeys.list();
 	const result: string[] = [];
@@ -170,18 +176,36 @@ async function getProvidersWithKeys(): Promise<string[]> {
 		const key = await storage.providerKeys.get(provider);
 		if (key) result.push(provider);
 	}
+	const customProviders = await storage.customProviders.getAll();
+	for (const custom of customProviders) {
+		if (!result.includes(custom.name)) result.push(custom.name);
+	}
 	return result;
+}
+
+async function findCustomProvider(provider: string): Promise<CustomProvider | undefined> {
+	const customProviders = await storage.customProviders.getAll();
+	return customProviders.find((p) => p.name === provider);
 }
 
 async function hasAnyApiKey(): Promise<boolean> {
 	const providers = await storage.providerKeys.list();
-	return providers.length > 0;
+	if (providers.length > 0) return true;
+	const customProviders = await storage.customProviders.getAll();
+	return customProviders.length > 0;
 }
 
 function openApiKeysDialog(): Promise<void> {
 	return new Promise((resolve) => {
 		SettingsDialog.open(
-			[new ApiKeysOAuthTab(), new CostsTab(), new SkillsTab(), new ProxyTab(), new AboutTab()],
+			[
+				new ApiKeysOAuthTab(),
+				new CustomProvidersTab(),
+				new CostsTab(),
+				new SkillsTab(),
+				new ProxyTab(),
+				new AboutTab(),
+			],
 			resolve,
 		);
 	});
@@ -195,7 +219,7 @@ async function updateAuthLabel() {
 	const provider = agent.state.model.provider;
 	const stored = await storage.providerKeys.get(provider);
 	if (!stored) {
-		authLabel = "";
+		authLabel = (await findCustomProvider(provider)) ? "custom" : "";
 	} else if (isOAuthCredentials(stored)) {
 		authLabel = "subscription";
 	} else {
@@ -395,7 +419,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 		}),
 		getApiKey: async (provider: string) => {
 			const stored = await storage.providerKeys.get(provider);
-			if (!stored) return undefined;
+			if (!stored) return (await findCustomProvider(provider))?.apiKey;
 			const proxyEnabled = await storage.settings.get<boolean>("proxy.enabled");
 			const proxyUrl = proxyEnabled ? (await storage.settings.get<string>("proxy.url")) || undefined : undefined;
 			return resolveApiKey(stored, provider, storage.providerKeys, proxyUrl);
@@ -703,6 +727,7 @@ const renderApp = () => {
 						onClick: () =>
 							SettingsDialog.open([
 								new ApiKeysOAuthTab(),
+								new CustomProvidersTab(),
 								new CostsTab(),
 								new SkillsTab(),
 								new ProxyTab(),
