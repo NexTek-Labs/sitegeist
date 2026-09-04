@@ -12,7 +12,8 @@
 		"dev": "concurrently -n \"build,css,server\" -c \"blue,green,yellow\" \"node ./scripts/build.mjs --watch\" \"tailwindcss -i ./src/app.css -o ./dist-chrome/app.css --watch\" \"node ./scripts/dev-server.mjs\"",
 		"typecheck": "tsc --noEmit",
 		"check": "biome check --write . && tsc --noEmit && cd site && npm run check",
-		"prepare": "husky"
+		"prepare": "husky",
+		"test": "../pi-mono/node_modules/.bin/vitest --run --root ."
 	},
 	"dependencies": {
 		"@mariozechner/jailjs": "^0.1.0",

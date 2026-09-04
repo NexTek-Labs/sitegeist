@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `npm test` (vitest from the sibling pi-mono install) and the contract tests for the upcoming `src/mcp/load-mcp-tools.ts`: MCP tools are loaded per enabled server with that server's own url and headers, one failing server never blocks the others, and no header value reaches the load results or the header-bar line (written before the implementation; see the sitegeist-nex working agreement, risk zones)
+
 ### Fixed
 
 - Side panel no longer fails to initialise against the pinned pi-agent-core: `Agent.setModel` / `appendMessage` / `replaceMessages` (removed upstream 2026-03-30) replaced by direct state assignments
