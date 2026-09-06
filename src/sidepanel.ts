@@ -8,6 +8,8 @@ import {
 	type AgentMessage,
 	type AgentState,
 	type AgentTool,
+	createMcpTools,
+	McpHttpClient,
 } from "@mariozechner/pi-agent-core";
 import { getModel, getModels, getProviders, type Model } from "@mariozechner/pi-ai";
 import {
@@ -15,6 +17,7 @@ import {
 	type CustomProvider,
 	createExtractDocumentTool,
 	createStreamFn,
+	McpServersTab,
 	ModelSelector,
 	ProxyTab,
 	SettingsDialog,
@@ -35,6 +38,7 @@ import { SkillsTab } from "./dialogs/SkillsTab.js";
 import { UpdateNotificationDialog } from "./dialogs/UpdateNotificationDialog.js";
 import { UserScriptsPermissionDialog } from "./dialogs/UserScriptsPermissionDialog.js";
 import { WelcomeSetupDialog } from "./dialogs/WelcomeSetupDialog.js";
+import { describeMcpLoad, loadMcpTools, type McpServerLoadResult } from "./mcp/load-mcp-tools.js";
 import { browserMessageTransformer } from "./messages/message-transformer.js";
 import {
 	createNavigationMessage,
@@ -106,6 +110,10 @@ const recordedCostMessages = new Set<AgentMessage>();
 
 // Cached auth type label for the current provider
 let authLabel = "";
+
+// MCP server tools and per-server load results (the only MCP data the UI sees; never carries a header value)
+let mcpTools: AgentTool<any, any>[] = [];
+let mcpResults: McpServerLoadResult[] = [];
 
 const DEFAULT_MODELS: Record<string, string> = {
 	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
@@ -206,12 +214,16 @@ function openApiKeysDialog(): Promise<void> {
 			[
 				new ApiKeysOAuthTab(),
 				new CustomProvidersTab(),
+				new McpServersTab(),
 				new CostsTab(),
 				new SkillsTab(),
 				new ProxyTab(),
 				new AboutTab(),
 			],
-			resolve,
+			() => {
+				resolve();
+				refreshMcpTools().catch(() => {});
+			},
 		);
 	});
 }
@@ -354,6 +366,40 @@ const updateUrl = (sessionId: string) => {
 	url.searchParams.set("session", sessionId);
 	window.history.replaceState({}, "", url);
 };
+
+/**
+ * Keep the first occurrence of each tool by `name`. Built-ins (first in the list)
+ * win over MCP tools, and earlier MCP servers win over later ones.
+ */
+function dedupeToolsByName(tools: AgentTool<any, any>[]): AgentTool<any, any>[] {
+	const seen = new Set<string>();
+	return tools.filter((tool) => {
+		if (seen.has(tool.name)) return false;
+		seen.add(tool.name);
+		return true;
+	});
+}
+
+/**
+ * Reload the tools of every enabled MCP server and, when an agent is live, swap
+ * the previous MCP tools on it for the new set. The first call (init) runs before
+ * any agent exists, so it only fills the module state for toolsFactory to use.
+ */
+async function refreshMcpTools(): Promise<void> {
+	const entries = storage.mcpServers ? await storage.mcpServers.getAll() : [];
+	const loaded = await loadMcpTools(entries, {
+		createClient: (config) => new McpHttpClient(config),
+		createTools: (client, options) => createMcpTools(client as McpHttpClient, options),
+	});
+	const previous = new Set(mcpTools.map((t) => t.name));
+	mcpTools = loaded.tools;
+	mcpResults = loaded.results;
+	if (agent) {
+		const kept = agent.state.tools.filter((t) => !previous.has(t.name));
+		agent.state.tools = dedupeToolsByName([...kept, ...mcpTools]);
+	}
+	renderApp();
+}
 
 const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true) => {
 	if (agentUnsubscribe) {
@@ -590,7 +636,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				tools.push(debuggerTool);
 			}
 
-			return tools;
+			return dedupeToolsByName([...tools, ...mcpTools]);
 		},
 	});
 
@@ -635,6 +681,7 @@ const newSession = () => {
 // RENDER
 // ============================================================================
 const renderApp = () => {
+	const mcpLabel = describeMcpLoad(mcpResults);
 	const appHtml = html`
 		<div class="w-full h-full flex flex-col bg-background text-foreground overflow-hidden">
 			<!-- Header -->
@@ -724,20 +771,25 @@ const renderApp = () => {
 				</div>
 				<div class="flex items-center gap-1 px-2">
 					${agent ? html`<span class="text-[10px] text-muted-foreground truncate max-w-[120px]" title="${agent.state.model.provider}/${agent.state.model.id}${authLabel ? ` (${authLabel})` : ""}">${agent.state.model.provider}${authLabel ? html` <span class="text-[9px] opacity-70">${authLabel}</span>` : ""}</span>` : ""}
+					${mcpLabel ? html`<span class="text-[10px] text-muted-foreground" title="${mcpLabel}">${mcpLabel}</span>` : ""}
 					<theme-toggle></theme-toggle>
 					${Button({
 						variant: "ghost",
 						size: "sm",
 						children: icon(Settings, "sm"),
 						onClick: () =>
-							SettingsDialog.open([
-								new ApiKeysOAuthTab(),
-								new CustomProvidersTab(),
-								new CostsTab(),
-								new SkillsTab(),
-								new ProxyTab(),
-								new AboutTab(),
-							]),
+							SettingsDialog.open(
+								[
+									new ApiKeysOAuthTab(),
+									new CustomProvidersTab(),
+									new McpServersTab(),
+									new CostsTab(),
+									new SkillsTab(),
+									new ProxyTab(),
+									new AboutTab(),
+								],
+								() => refreshMcpTools().catch(() => {}),
+							),
 						title: "Settings",
 					})}
 				</div>
@@ -981,6 +1033,10 @@ async function initApp() {
 
 	// Create ChatPanel
 	chatPanel = new ChatPanel();
+
+	// Start loading MCP tools without blocking: a hanging server must never stall the panel.
+	// The live-agent swap in refreshMcpTools applies tools that arrive late.
+	refreshMcpTools().catch(() => {});
 
 	// Handle test steps
 	if (await testSteps()) {
