@@ -368,6 +368,19 @@ const updateUrl = (sessionId: string) => {
 };
 
 /**
+ * Keep the first occurrence of each tool by `name`. Built-ins (first in the list)
+ * win over MCP tools, and earlier MCP servers win over later ones.
+ */
+function dedupeToolsByName(tools: AgentTool<any, any>[]): AgentTool<any, any>[] {
+	const seen = new Set<string>();
+	return tools.filter((tool) => {
+		if (seen.has(tool.name)) return false;
+		seen.add(tool.name);
+		return true;
+	});
+}
+
+/**
  * Reload the tools of every enabled MCP server and, when an agent is live, swap
  * the previous MCP tools on it for the new set. The first call (init) runs before
  * any agent exists, so it only fills the module state for toolsFactory to use.
@@ -382,7 +395,8 @@ async function refreshMcpTools(): Promise<void> {
 	mcpTools = loaded.tools;
 	mcpResults = loaded.results;
 	if (agent) {
-		agent.state.tools = [...agent.state.tools.filter((t) => !previous.has(t.name)), ...mcpTools];
+		const kept = agent.state.tools.filter((t) => !previous.has(t.name));
+		agent.state.tools = dedupeToolsByName([...kept, ...mcpTools]);
 	}
 	renderApp();
 }
@@ -622,7 +636,7 @@ const createAgent = async (initialState?: Partial<AgentState>, shouldSave = true
 				tools.push(debuggerTool);
 			}
 
-			return [...tools, ...mcpTools];
+			return dedupeToolsByName([...tools, ...mcpTools]);
 		},
 	});
 
@@ -1020,8 +1034,9 @@ async function initApp() {
 	// Create ChatPanel
 	chatPanel = new ChatPanel();
 
-	// Load MCP tools before the first agent is created so the first session already has them
-	await refreshMcpTools();
+	// Start loading MCP tools without blocking: a hanging server must never stall the panel.
+	// The live-agent swap in refreshMcpTools applies tools that arrive late.
+	refreshMcpTools().catch(() => {});
 
 	// Handle test steps
 	if (await testSteps()) {
