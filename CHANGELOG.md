@@ -4,6 +4,7 @@
 
 ### Added
 
+- Load the tools of every enabled MCP server at start-up and after Settings close, an "MCP Servers" settings tab, and a header-bar indicator; a failing server never blocks the others and no header value reaches the UI
 - `npm test` (vitest from the sibling pi-mono install) and the contract tests for the upcoming `src/mcp/load-mcp-tools.ts`: MCP tools are loaded per enabled server with that server's own url and headers, one failing server never blocks the others, and no header value reaches the load results or the header-bar line (written before the implementation; see the sitegeist-nex working agreement, risk zones)
 
 ### Fixed

@@ -3,6 +3,7 @@ import {
 	CustomProvidersStore,
 	getAppStorage,
 	IndexedDBStorageBackend,
+	McpServersStore,
 	ProviderKeysStore,
 	SessionsStore,
 	SettingsStore,
@@ -24,6 +25,7 @@ export class SitegeistAppStorage extends BaseAppStorage {
 		const providerKeys = new ProviderKeysStore();
 		const sessions = new SitegeistSessionsStore();
 		const customProviders = new CustomProvidersStore();
+		const mcpServers = new McpServersStore();
 		const skills = new SkillsStore();
 		const costs = new CostStore();
 
@@ -33,6 +35,7 @@ export class SitegeistAppStorage extends BaseAppStorage {
 			SessionsStore.getMetadataConfig(),
 			providerKeys.getConfig(),
 			customProviders.getConfig(),
+			mcpServers.getConfig(),
 			sessions.getConfig(),
 			skills.getConfig(),
 			costs.getConfig(),
@@ -41,7 +44,7 @@ export class SitegeistAppStorage extends BaseAppStorage {
 		// 3. Create backend with all configs
 		const backend = new IndexedDBStorageBackend({
 			dbName: "sitegeist-storage",
-			version: 3, // Increment version to add custom-providers store
+			version: 4, // Increment version to add mcp-servers store
 			stores: configs,
 		});
 
@@ -49,12 +52,13 @@ export class SitegeistAppStorage extends BaseAppStorage {
 		settings.setBackend(backend);
 		providerKeys.setBackend(backend);
 		customProviders.setBackend(backend);
+		mcpServers.setBackend(backend);
 		sessions.setBackend(backend);
 		skills.setBackend(backend);
 		costs.setBackend(backend);
 
 		// 5. Pass base stores to parent
-		super(settings, providerKeys, sessions, customProviders, backend);
+		super(settings, providerKeys, sessions, customProviders, backend, mcpServers);
 
 		// 6. Store references to sitegeist-specific stores
 		this.skills = skills;
